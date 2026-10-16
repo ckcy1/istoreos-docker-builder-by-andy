@@ -1,0 +1,310 @@
+# ============================================================
+# 工作流名称：构建预置配置的 iStoreOS rootfs 和 Docker 镜像
+# 目标：构建阶段完成全部定制，产出开箱即用的 rootfs.tar.gz
+# 借鉴：wukongdaily 的四处关键修改 + 我们自己的网络预置增强
+# ============================================================
+name: Build iStoreOS rootfs & Docker Image
+
+# 触发条件配置
+on:
+  # 允许在 GitHub Actions 页面手动触发
+  workflow_dispatch:
+    inputs:
+      # 手动触发时可自定义 ImageBuilder 下载链接
+      imagebuilder_url:
+        description: 'ImageBuilder tar.zst 下载链接'
+        required: true
+        # 默认链接请以 iStoreOS 官网最新版本为准：https://fw.koolcenter.com/iStoreOS/
+        default: 'https://fw.koolcenter.com/iStoreOS/x86_64/istoreos-x86-64-2025123110-imagebuilder.tar.zst'
+      # 是否推送 Docker 镜像到 Docker Hub
+      docker_push:
+        description: '是否推送 Docker 镜像'
+        type: boolean
+        default: false
+  # 推送到 main 分支时自动触发（可选，不需要可删除）
+  # push:
+  #   branches: [main]
+
+# 权限配置：读取仓库内容即可
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================
+  # 任务：构建 rootfs 和 Docker 镜像
+  # ============================================================
+  build:
+    # 运行环境：Ubuntu 最新版（x86_64 架构）
+    runs-on: ubuntu-latest
+
+    steps:
+      # ============================================================
+      # 步骤 1：拉取仓库代码
+      # ============================================================
+      - name: 拉取仓库代码
+        uses: actions/checkout@v4
+        # 作用：把仓库内容（含 targets/x86_64/ 下的 files/、packages/）拉到工作目录
+        # 后续步骤会把这些内容同步到 ImageBuilder
+
+      # ============================================================
+      # 步骤 2：安装构建依赖
+      # ============================================================
+      - name: 安装系统依赖
+        run: |
+          # 刷新 apt 索引，获取最新包列表
+          sudo apt-get update
+          # 安装构建所需的工具：
+          # - build-essential：gcc/make 等基础编译工具链
+          # - libncurses5-dev：menuconfig 所需的终端 UI 库
+          # - zlib1g-dev：zlib 压缩库头文件
+          # - gawk：ImageBuilder 脚本依赖的 GNU awk
+          # - git：feeds 更新需要
+          # - unzip：解压部分软件包
+          # - file：识别文件类型
+          # - wget：下载 ImageBuilder
+          # - python3 / python3-pip：部分构建脚本需要
+          # - rsync：同步 files 目录时使用
+          # - zstd：解压 .tar.zst 格式的 ImageBuilder
+          # - libssl-dev：部分包编译需要
+          sudo apt-get install -y \
+            build-essential \
+            libncurses5-dev \
+            zlib1g-dev \
+            gawk \
+            git \
+            unzip \
+            file \
+            wget \
+            python3 \
+            python3-pip \
+            rsync \
+            zstd \
+            libssl-dev
+
+      # ============================================================
+      # 步骤 3：缓存 ImageBuilder 下载
+      # ============================================================
+      - name: 缓存 ImageBuilder
+        uses: actions/cache@v4
+        with:
+          # 缓存 key：用 ImageBuilder URL 的 SHA 作为唯一标识
+          # 同一 URL 只下载一次，后续直接从缓存恢复
+          key: imagebuilder-${{ hashFiles('targets/x86_64/config.seed') }}-${{ github.event.inputs.imagebuilder_url || 'default' }}
+          # 缓存路径：ImageBuilder 压缩包存放位置
+          path: /tmp/cache-imagebuilder
+
+      # ============================================================
+      # 步骤 4：下载并解压 ImageBuilder
+      # ============================================================
+      - name: 下载并解压 ImageBuilder
+        run: |
+          # 创建工作目录，用于存放 ImageBuilder
+          mkdir -p /tmp/build
+          # 创建缓存目录，用于存放下载的压缩包
+          mkdir -p /tmp/cache-imagebuilder
+          # 定义 ImageBuilder 压缩包路径（从 URL 中提取文件名）
+          # 使用 workflow_dispatch 输入的 URL；push 触发时用默认值
+          IB_URL="${{ github.event.inputs.imagebuilder_url || 'https://fw.koolcenter.com/iStoreOS/x86_64/istoreos-x86-64-2025123110-imagebuilder.tar.zst' }}"
+          # 从 URL 中截取文件名（去掉目录部分）
+          IB_FILE="/tmp/cache-imagebuilder/$(basename "$IB_URL")"
+          # 判断缓存中是否已存在该文件
+          if [ -f "$IB_FILE" ]; then
+            # 缓存命中：直接使用，跳过下载
+            echo "===== 使用缓存中的 ImageBuilder: $IB_FILE ====="
+          else
+            # 缓存未命中：从 URL 下载
+            echo "===== 下载 ImageBuilder: $IB_URL ====="
+            # --no-check-certificate 允许自签名证书
+            # -O 保存为 URL 中的文件名
+            wget --no-check-certificate -O "$IB_FILE" "$IB_URL"
+          fi
+          # 解压 .tar.zst 格式（zstd 压缩的 tar 包）
+          # --use-compress-program=unzstd 让 tar 调用 zstd 解压
+          # -x 解压，-v 显示过程，-f 指定文件
+          tar --use-compress-program=unzstd -xvf "$IB_FILE" -C /tmp/build
+          # 解压后目录名可能是 istoreos-imagebuilder-xxx，重命名为 imagebuilder
+          # 用通配符匹配所有可能的名字
+          cd /tmp/build
+          # 找到唯一的 imagebuilder 目录
+          IB_DIR=$(ls -d istoreos-imagebuilder-* 2>/dev/null | head -n1)
+          # 如果找到则重命名，否则报错退出
+          if [ -n "$IB_DIR" ]; then
+            mv "$IB_DIR" imagebuilder
+          else
+            echo "错误：未找到解压后的 ImageBuilder 目录"
+            exit 1
+          fi
+          # 打印 ImageBuilder 目录内容，确认结构正确
+          echo "===== ImageBuilder 目录内容 ====="
+          ls -la /tmp/build/imagebuilder/
+
+      # ============================================================
+      # 步骤 5：应用 config.seed 到 ImageBuilder 的 .config
+      # 对应 wukongdaily 修改 1/4：启用 rootfs.tar.gz 输出
+      # ============================================================
+      - name: 应用 config.seed
+        run: |
+          cd /tmp/build/imagebuilder
+          # 备份原始 .config（如果存在）
+          [ -f .config ] && cp .config .config.orig || true
+          # 将仓库中的 config.seed 追加到 .config
+          # 追加而非覆盖，避免丢失 ImageBuilder 自带的必要配置
+          cat "$GITHUB_WORKSPACE/targets/x86_64/config.seed" >> .config
+          # 打印最终的 .config 中关键项，确认生效
+          echo "===== .config 中的关键配置 ====="
+          grep -E 'CONFIG_TARGET_ROOTFS' .config || true
+
+      # ============================================================
+      # 步骤 6：复制第三方 IPK 到 ImageBuilder
+      # 对应 wukongdaily 修改 3/4：集成第三方插件
+      # ============================================================
+      - name: 复制第三方 IPK 包
+        run: |
+          # 检查仓库中 packages 目录是否存在且有内容
+          PKG_SRC="$GITHUB_WORKSPACE/targets/x86_64/packages"
+          # 如果目录存在且包含 .ipk 文件
+          if [ -d "$PKG_SRC" ] && ls "$PKG_SRC"/*.ipk >/dev/null 2>&1; then
+            # 在 ImageBuilder 根目录创建 packages 目录
+            mkdir -p /tmp/build/imagebuilder/packages
+            # 复制所有 ipk 文件到 ImageBuilder 的 packages 目录
+            cp -v "$PKG_SRC"/*.ipk /tmp/build/imagebuilder/packages/
+            # 打印复制后的文件列表
+            echo "===== ImageBuilder/packages 目录内容 ====="
+            ls -lh /tmp/build/imagebuilder/packages/
+          else
+            # 没有第三方 IPK 时，跳过但打印提示
+            echo "未发现第三方 IPK，跳过此步骤"
+          fi
+
+      # ============================================================
+      # 步骤 7：同步 files 目录到 ImageBuilder
+      # 对应 wukongdaily 修改 4/4：预置网络配置、启动脚本
+      # 这是实现"开箱即用"最关键的步骤
+      # ============================================================
+      - name: 同步 files 目录
+        run: |
+          # 定义源目录和目标目录
+          SRC="$GITHUB_WORKSPACE/targets/x86_64/files"
+          DST="/tmp/build/imagebuilder/files"
+          # 检查源目录是否存在
+          if [ -d "$SRC" ]; then
+            # rsync 同步：
+            #   -a 保留权限和时间戳
+            #   -v 显示详细过程
+            #   --delete 删除目标中多余的文件（保持完全一致）
+            # 注意：如果 ImageBuilder 自带的 files 目录有内容，会被清空
+            mkdir -p "$DST"
+            rsync -av --delete "$SRC/" "$DST/"
+            # 打印同步后的文件树，便于确认预置内容
+            echo "===== 预置到 rootfs 的文件列表 ====="
+            find "$DST" -type f -exec ls -lh {} \;
+          else
+            # 源目录不存在时打印警告
+            echo "警告：未发现 files 目录，将不会预置任何文件"
+          fi
+
+      # ============================================================
+      # 步骤 8：执行 ImageBuilder 构建
+      # 产出 rootfs.tar.gz
+      # ============================================================
+      - name: 执行构建
+        run: |
+          cd /tmp/build/imagebuilder
+          # 更新 feeds 索引（拉取官方软件包列表）
+          # -a 表示全部更新
+          ./scripts/feeds update -a
+          # 安装所有 feeds 中的包到 staging_dir
+          ./scripts/feeds install -a
+          # 读取 packages.list 并转为空格分隔的字符串
+          # tr '\n' ' ' 把每行结尾的换行替换为空格
+          # sed 's/ $//' 去掉末尾多余的空格
+          PKG_LIST=$(tr '\n' ' ' < "$GITHUB_WORKSPACE/targets/x86_64/packages.list" | sed 's/ $//')
+          # 打印即将使用的包清单
+          echo "===== 将打入固件的软件包 ====="
+          echo "$PKG_LIST"
+          # 执行构建：
+          #   PROFILE=generic：x86_64 通用配置
+          #   PACKAGES="$PKG_LIST"：从 packages.list 读取的包清单
+          #   FILES=files：指定预置文件目录（ImageBuilder 会复制到 rootfs /）
+          make image \
+            PROFILE=generic \
+            PACKAGES="$PKG_LIST" \
+            FILES=files
+
+      # ============================================================
+      # 步骤 9：检查并定位构建产物
+      # ============================================================
+      - name: 检查构建产物
+        run: |
+          cd /tmp/build/imagebuilder
+          # 打印所有构建产物
+          echo "===== 构建产物列表 ====="
+          find bin/targets -type f -name "*.tar.gz" -exec ls -lh {} \; || true
+          # 查找 rootfs.tar.gz 的路径
+          ROOTFS_PATH=$(find bin/targets -type f -name "*rootfs.tar.gz" | head -n1)
+          # 未找到则报错退出
+          if [ -z "$ROOTFS_PATH" ]; then
+            echo "错误：未找到 rootfs.tar.gz，构建失败"
+            exit 1
+          fi
+          # 打印找到的路径
+          echo "===== 找到 rootfs.tar.gz: $ROOTFS_PATH ====="
+          # 复制到统一路径，方便后续步骤引用
+          cp "$ROOTFS_PATH" /tmp/build/rootfs.tar.gz
+          # 打印文件大小
+          ls -lh /tmp/build/rootfs.tar.gz
+          # 查看压缩包内的关键文件，确认预置生效
+          echo "===== 检查压缩包内是否包含预置文件 ====="
+          tar -tzf /tmp/build/rootfs.tar.gz | grep -E 'etc/(config/network|uci-defaults|shadow|openwrt_release)' | head -20 || true
+
+      # ============================================================
+      # 步骤 10：上传 rootfs.tar.gz 为 Artifact
+      # ============================================================
+      - name: 上传 rootfs Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Artifact 名称（在 Actions 页面下载时显示）
+          name: istoreos-rootfs-x86_64
+          # 上传的文件路径
+          path: /tmp/build/rootfs.tar.gz
+          # 保留天数（免费额度最长 90 天）
+          retention-days: 30
+
+      # ============================================================
+      # 步骤 11：构建 Docker 镜像并推送到 Docker Hub（可选）
+      # 只在手动触发且勾选了 docker_push 时执行
+      # ============================================================
+      - name: 构建并推送 Docker 镜像
+        # 判断条件：手动触发时勾选了 docker_push
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.docker_push == 'true' }}
+        run: |
+          # 创建 Docker 构建上下文目录
+          mkdir -p /tmp/docker-build
+          cd /tmp/docker-build
+          # 复制 rootfs.tar.gz 到构建上下文
+          cp /tmp/build/rootfs.tar.gz .
+          # 动态生成 Dockerfile
+          # 使用 cat <<'EOF' 保留内容原样（不做变量替换）
+          cat > Dockerfile <<'DOCKERFILE_EOF'
+          # 基础镜像：从空镜像开始，只包含我们的 rootfs
+          FROM scratch
+          # 将预置好配置的 rootfs 铺到容器根目录
+          ADD rootfs.tar.gz /
+          # 设置默认命令：启动 OpenWrt 的 procd 初始化系统
+          CMD ["/sbin/init"]
+          DOCKERFILE_EOF
+          # 打印 Dockerfile 内容，便于日志确认
+          echo "===== Dockerfile 内容 ====="
+          cat Dockerfile
+          # 登录 Docker Hub（凭据从仓库 Secrets 读取）
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+            docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          # 构建镜像
+          # 镜像名格式：<用户名>/<仓库名>:<标签>
+          docker build \
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/istoreos-custom:amd64" \
+            .
+          # 推送镜像到 Docker Hub
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/istoreos-custom:amd64"
+          # 打印推送成功的提示
+          echo "===== 镜像已推送到 Docker Hub ====="

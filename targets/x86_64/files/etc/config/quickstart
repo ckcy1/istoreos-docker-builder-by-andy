@@ -1,0 +1,10 @@
+# ============================================================
+# quickstart 配置文件
+# 借鉴 wukongdaily 的关键经验：禁用 diskInfo 模块
+# 原因：容器里没有真实磁盘，diskInfo 读取失败会导致 quickstart 报错
+# ============================================================
+
+config quickstart 'main'
+
+config disabledisplay 'modules'
+        list module 'diskInfo'

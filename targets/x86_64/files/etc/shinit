@@ -1,0 +1,34 @@
+# ============================================================
+# Shell 初始化脚本：每次打开交互式 shell 时执行
+# ============================================================
+
+# 显示登录 Banner（如果存在）
+[ -f /etc/banner ] && cat /etc/banner
+
+# more 命令的兼容处理
+[ -x /bin/more ] || [ -x /usr/bin/more ] || alias more=less
+
+# vi 命令的兼容处理
+[ -x /usr/bin/vim ] && alias vi=vim || alias vim=vi
+
+# 自定义别名：ll 显示所有文件含隐藏文件
+alias ll='ls -alF --color=auto'
+# 自定义别名：la 显示几乎所有文件
+alias la='ls -A --color=auto'
+# 自定义别名：grep 高亮匹配
+alias grep='grep --color=auto'
+# 自定义别名：.. 返回上级目录
+alias ..='cd ..'
+# 自定义别名：... 返回上两级目录
+alias ...='cd ../..'
+
+# ksh 相关兼容处理（保留原样）
+[ -z "$KSH_VERSION" -o \! -s /etc/mkshrc ] || . /etc/mkshrc
+
+# arp / ldd 命令兼容处理
+[ -x /usr/bin/arp -o -x /sbin/arp ] || arp() { cat /proc/net/arp; }
+[ -x /usr/bin/ldd ] || ldd() { LD_TRACE_LOADED_OBJECTS=1 $*; }
+
+# 用户自定义 shinit / mkshrc
+[ -n "$KSH_VERSION" -o \! -s "$HOME/.shinit" ] || . "$HOME/.shinit"
+[ -z "$KSH_VERSION" -o \! -s "$HOME/.mkshrc" ] || . "$HOME/.mkshrc"

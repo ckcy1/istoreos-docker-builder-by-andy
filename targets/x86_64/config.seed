@@ -1,0 +1,19 @@
+# ============================================================
+# ImageBuilder 的额外配置种子
+# 会被追加到 ImageBuilder 的 .config 中
+# ============================================================
+
+# 关键：启用 rootfs.tar.gz 输出（wukongdaily 修改 1/4）
+# 没有这一行，make image 不会生成 rootfs.tar.gz，Docker 打包就无从谈起
+CONFIG_TARGET_ROOTFS_TARGZ=y
+
+# 同时输出 .img.gz（用于虚拟机或物理机部署）
+# 方便同一份代码既产出 Docker 用的 rootfs，又产出 VM 用的 img
+CONFIG_TARGET_ROOTFS_EXT4FS=y
+CONFIG_TARGET_IMAGES_GZIP=y
+
+# 内核分区大小 32MB（默认 16MB，某些插件需要更大空间）
+CONFIG_TARGET_KERNEL_PARTSIZE=32
+
+# rootfs 分区大小 1024MB（默认 256MB，iStoreOS 带 LuCI 需要更大）
+CONFIG_TARGET_ROOTFS_PARTSIZE=1024

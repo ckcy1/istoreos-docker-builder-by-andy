@@ -1,0 +1,31 @@
+# ============================================================
+# 默认网络配置（会被 uci-defaults/00-network 动态覆盖）
+# 作为"保底"，即使 uci-defaults 脚本失败也能保证网络可用
+# ============================================================
+
+# 环回接口（必需）
+config interface 'loopback'
+    option device 'lo'
+    option proto 'static'
+    option ipaddr '127.0.0.1'
+    option netmask '255.0.0.0'
+
+# 全局设置
+config globals 'globals'
+    option ula_prefix 'fd00::/48'
+
+# 桥接设备：默认包含 eth0
+# 容器里 Macvlan 会识别为 eth0@ifX，从容器内看就是 eth0
+config device
+    option name 'br-lan'
+    option type 'bridge'
+    list ports 'eth0'
+
+# LAN 接口：DHCP 自动获取 IP
+# 这样容器启动后会自动从局域网 DHCP 拿到 IP
+config interface 'lan'
+    option device 'br-lan'
+    option proto 'dhcp'
+
+# 注意：不配置 wan 接口
+# 容器只有一个网卡，配置 wan 会和 lan 抢同一个物理设备

@@ -1,0 +1,33 @@
+# ============================================================
+# 系统配置：主机名、时区、NTP、LuCI 首页信息
+# ============================================================
+config system
+        # 主机名：容器内显示的名字
+        option hostname 'iStoreOS'
+        # 关闭 tty 登录提示（容器里不需要，减少启动噪音）
+        option ttylogin '0'
+        # 系统日志大小（KB）
+        option log_size '128'
+        # 不使用预生成的 urandom seed
+        option urandom_seed '0'
+        # 时区名
+        option zonename 'Asia/Shanghai'
+        # 日志协议
+        option log_proto 'udp'
+        # 控制台日志级别
+        option conloglevel '8'
+        # cron 日志级别
+        option cronloglevel '7'
+        # 时区偏移（CST-8 即 UTC+8）
+        option timezone 'CST-8'
+        # LuCI 首页描述：改成你自己的标识
+        option description 'Custom iStoreOS build'
+        # LuCI 首页备注
+        option notes 'Built with GitHub Actions'
+
+# NTP 时间服务器：使用国内源，加快同步
+config timeserver 'ntp'
+        list server 'ntp.aliyun.com'
+        list server 'ntp.tencent.com'
+        list server 'cn.ntp.org.cn'
+        list server 'ntp.ntsc.ac.cn'
