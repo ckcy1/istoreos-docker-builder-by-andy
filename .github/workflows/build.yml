@@ -15,7 +15,7 @@ on:
         description: 'ImageBuilder tar.zst 下载链接'
         required: true
         # 默认链接请以 iStoreOS 官网最新版本为准：https://fw.koolcenter.com/iStoreOS/
-        default: 'https://fw.koolcenter.com/iStoreOS/x86_64/istoreos-x86-64-2025123110-imagebuilder.tar.zst'
+        default: 'https://fw.koolcenter.com/iStoreOS/ib/x86_64/istoreos-imagebuilder-x86-64.Linux-x86_64.tar.zst'
       # 是否推送 Docker 镜像到 Docker Hub
       docker_push:
         description: '是否推送 Docker 镜像'

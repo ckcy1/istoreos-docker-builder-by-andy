@@ -3,10 +3,11 @@
 # 注意：DISTRIB_RELEASE 和 DISTRIB_REVISION 要与你使用的 ImageBuilder 版本匹配
 # ============================================================
 DISTRIB_ID='iStoreOS'
-DISTRIB_RELEASE='24.10.5'
-DISTRIB_REVISION='2025123110'
+DISTRIB_RELEASE='25.12.5'
+DISTRIB_REVISION='r2026-092410'
+DISTRIB_CODENAME='istoreos'
 DISTRIB_TARGET='x86/64'
 DISTRIB_ARCH='x86_64'
 # 改成你自己的标识
-DISTRIB_DESCRIPTION='iStoreOS 24.10.5 custom build'
+DISTRIB_DESCRIPTION='iStoreOS 25.12.5 by andy8797 build'
 DISTRIB_TAINTS='busybox'
