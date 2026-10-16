@@ -292,7 +292,17 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-
+      - name: 调试 Secret 是否存在
+        run: |
+          # 用 ${VAR:+已设置} 语法判断变量是否非空，不会打印真实值
+          echo "USERNAME 是否设置: ${USERNAME:+已设置}"
+          echo "TOKEN 是否设置: ${TOKEN:+已设置}"
+          # 打印长度，进一步确认
+          echo "USERNAME 长度: ${#USERNAME}"
+          echo "TOKEN 长度: ${#TOKEN}"
+        env:
+          USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
 
 
