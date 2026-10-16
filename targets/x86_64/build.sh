@@ -5,7 +5,7 @@
 # 使用方式：cd <ImageBuilder 目录> && sh <此脚本路径>
 # ============================================================
 
-# 检查当前目录是否是 ImageBuilder 根目录（通过是否存在 Makefile 判断）
+# 检查当前目录是否是 ImageBuilder 根目录
 if [ ! -f Makefile ]; then
     echo "错误：当前目录不是 ImageBuilder 根目录"
     echo "请先 cd 到 ImageBuilder 目录再执行此脚本"
@@ -19,11 +19,10 @@ if [ ! -f "$PKG_LIST_FILE" ]; then
     exit 1
 fi
 
-# 把 packages.list 的每行包名拼成空格分隔的字符串
-PACKAGES=$(tr '\n' ' ' < "$PKG_LIST_FILE" | sed 's/ $//')
+# 读取包清单，过滤注释和空行
+PACKAGES=$(grep -v '^\s*#' "$PKG_LIST_FILE" | grep -v '^\s*$' | tr '\n' ' ' | sed 's/ $//')
 
 # 同步 files 目录到当前 ImageBuilder 根目录
-# 确保 ImageBuilder 能找到 files/ 目录
 FILES_DIR="$(dirname "$0")/files"
 if [ -d "$FILES_DIR" ]; then
     rsync -a --delete "$FILES_DIR/" ./files/
@@ -32,7 +31,6 @@ else
 fi
 
 # 执行构建
-# PROFILE=generic 使用通用 x86_64 配置
 make image \
   PROFILE=generic \
   PACKAGES="$PACKAGES" \

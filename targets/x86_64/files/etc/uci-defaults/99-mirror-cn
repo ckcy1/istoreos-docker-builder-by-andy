@@ -1,21 +1,21 @@
 #!/bin/sh
 # ============================================================
-# uci-defaults 脚本：首次启动时替换 opkg 源为国内镜像
-# 为什么这样做：不硬编码 kmods 哈希，避免换版本后失效
-# 原理：读取 ImageBuilder 自带的正确哈希，只替换域名部分
+# uci-defaults 脚本：首次启动时替换 apk 源为国内镜像
+# 25.12 使用 apk 包管理器，源配置文件路径为：
+#   /etc/apk/repositories.d/distfeeds.list
+# 格式为每行一个 packages.adb 的完整 URL
 # ============================================================
 
-# 检查 distfeeds.conf 是否存在
-if [ -f /etc/opkg/distfeeds.conf ]; then
+# 检查 apk 源配置文件是否存在
+if [ -f /etc/apk/repositories.d/distfeeds.list ]; then
     # 备份原始文件
-    cp /etc/opkg/distfeeds.conf /etc/opkg/distfeeds.conf.bak
+    cp /etc/apk/repositories.d/distfeeds.list /etc/apk/repositories.d/distfeeds.list.bak
     # 用 sed 把 downloads.openwrt.org 替换为 CERNET 国内镜像
-    # 保留路径中的 kmods 哈希不变，因此不会出现版本不匹配
-    sed -i 's|https://downloads.openwrt.org|https://mirrors.cernet.edu.cn/openwrt|g' /etc/opkg/distfeeds.conf
-    # 打印替换后的结果，便于验证
-    echo "[uci-defaults] opkg 源已切换为 CERNET 镜像:"
-    cat /etc/opkg/distfeeds.conf
+    # 保留路径中的版本号和 kmods 哈希不变
+    sed -i 's|https://downloads.openwrt.org|https://mirrors.cernet.edu.cn/openwrt|g' \
+        /etc/apk/repositories.d/distfeeds.list
+    echo "[uci-defaults] apk 源已切换为 CERNET 镜像:"
+    cat /etc/apk/repositories.d/distfeeds.list
 fi
 
-# 成功退出
 exit 0

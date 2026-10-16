@@ -2,10 +2,8 @@
 # ============================================================
 # uci-defaults 脚本：首次启动时自动执行一次
 # 作用：动态检测容器内网卡名，写入正确的网络配置
-# 为什么需要：不同环境下容器内网卡名可能是 eth0、ens18 等
-#             硬编码 eth0 在某些宿主机上会失效
 # 执行时机：iStoreOS 首次启动时
-# 执行后：本脚本自动从 /etc/uci-defaults 删除（原始文件保留在 /rom）
+# 执行后：本脚本自动从 /etc/uci-defaults 删除
 # ============================================================
 
 # 初始化网卡变量
@@ -27,11 +25,9 @@ done
 # 如果没找到网卡，回退为 eth0
 [ -z "$IFACE" ] && IFACE="eth0"
 
-# 打印检测结果，便于排查
 echo "[uci-defaults] 检测到网卡: $IFACE"
 
 # 使用 uci batch 批量写入配置
-# -q 静默模式，减少输出
 uci -q batch <<EOF
 # 删除可能存在的 wan 接口（避免与 lan 冲突）
 delete network.wan
@@ -46,11 +42,10 @@ set network.lan.device='br-lan'
 set network.lan.proto='dhcp'
 EOF
 
-# 提交配置变更（写入 /etc/config/network）
+# 提交配置变更
 uci commit network
 
 # 重启网络服务，让配置立即生效
 /etc/init.d/network restart
 
-# 退出码 0 表示成功，系统会自动删除此脚本
 exit 0

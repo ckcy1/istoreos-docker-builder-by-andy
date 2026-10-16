@@ -22,7 +22,7 @@ alias ..='cd ..'
 # 自定义别名：... 返回上两级目录
 alias ...='cd ../..'
 
-# ksh 相关兼容处理（保留原样）
+# ksh 相关兼容处理
 [ -z "$KSH_VERSION" -o \! -s /etc/mkshrc ] || . /etc/mkshrc
 
 # arp / ldd 命令兼容处理

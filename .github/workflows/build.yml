@@ -1,9 +1,9 @@
 # ============================================================
-# 工作流名称：构建预置配置的 iStoreOS rootfs 和 Docker 镜像
+# 工作流名称：构建预置配置的 iStoreOS 25.12.5 rootfs 和 Docker 镜像
 # 目标：构建阶段完成全部定制，产出开箱即用的 rootfs.tar.gz
-# 借鉴：wukongdaily 的四处关键修改 + 我们自己的网络预置增强
+# 适配：iStoreOS 25.12.5（apk 包管理器）
 # ============================================================
-name: Build iStoreOS rootfs & Docker Image
+name: Build iStoreOS 25.12.5 rootfs & Docker Image
 
 # 触发条件配置
 on:
@@ -14,7 +14,7 @@ on:
       imagebuilder_url:
         description: 'ImageBuilder tar.zst 下载链接'
         required: true
-        # 默认链接请以 iStoreOS 官网最新版本为准：https://fw.koolcenter.com/iStoreOS/
+        # iStoreOS 25.12.5 对应的 x86_64 ImageBuilder 下载地址
         default: 'https://fw.koolcenter.com/iStoreOS/ib/x86_64/istoreos-imagebuilder-x86-64.Linux-x86_64.tar.zst'
       # 是否推送 Docker 镜像到 Docker Hub
       docker_push:
@@ -22,8 +22,8 @@ on:
         type: boolean
         default: false
   # 推送到 main 分支时自动触发（可选，不需要可删除）
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
 
 # 权限配置：读取仓库内容即可
 permissions:
@@ -103,16 +103,13 @@ jobs:
           # 创建缓存目录，用于存放下载的压缩包
           mkdir -p /tmp/cache-imagebuilder
           # 定义 ImageBuilder 压缩包路径（从 URL 中提取文件名）
-          # 使用 workflow_dispatch 输入的 URL；push 触发时用默认值
-          IB_URL="${{ github.event.inputs.imagebuilder_url || 'https://fw.koolcenter.com/iStoreOS/x86_64/istoreos-x86-64-2025123110-imagebuilder.tar.zst' }}"
+          IB_URL="${{ github.event.inputs.imagebuilder_url || 'https://fw.koolcenter.com/iStoreOS/ib/x86_64/istoreos-imagebuilder-x86-64.Linux-x86_64.tar.zst' }}"
           # 从 URL 中截取文件名（去掉目录部分）
           IB_FILE="/tmp/cache-imagebuilder/$(basename "$IB_URL")"
           # 判断缓存中是否已存在该文件
           if [ -f "$IB_FILE" ]; then
-            # 缓存命中：直接使用，跳过下载
             echo "===== 使用缓存中的 ImageBuilder: $IB_FILE ====="
           else
-            # 缓存未命中：从 URL 下载
             echo "===== 下载 ImageBuilder: $IB_URL ====="
             # --no-check-certificate 允许自签名证书
             # -O 保存为 URL 中的文件名
@@ -120,21 +117,16 @@ jobs:
           fi
           # 解压 .tar.zst 格式（zstd 压缩的 tar 包）
           # --use-compress-program=unzstd 让 tar 调用 zstd 解压
-          # -x 解压，-v 显示过程，-f 指定文件
           tar --use-compress-program=unzstd -xvf "$IB_FILE" -C /tmp/build
           # 解压后目录名可能是 istoreos-imagebuilder-xxx，重命名为 imagebuilder
-          # 用通配符匹配所有可能的名字
           cd /tmp/build
-          # 找到唯一的 imagebuilder 目录
           IB_DIR=$(ls -d istoreos-imagebuilder-* 2>/dev/null | head -n1)
-          # 如果找到则重命名，否则报错退出
           if [ -n "$IB_DIR" ]; then
             mv "$IB_DIR" imagebuilder
           else
             echo "错误：未找到解压后的 ImageBuilder 目录"
             exit 1
           fi
-          # 打印 ImageBuilder 目录内容，确认结构正确
           echo "===== ImageBuilder 目录内容 ====="
           ls -la /tmp/build/imagebuilder/
 
@@ -155,25 +147,26 @@ jobs:
           grep -E 'CONFIG_TARGET_ROOTFS' .config || true
 
       # ============================================================
-      # 步骤 6：复制第三方 IPK 到 ImageBuilder
+      # 步骤 6：复制第三方 APK 包到 ImageBuilder
       # 对应 wukongdaily 修改 3/4：集成第三方插件
+      # 注意：25.12 使用 .apk 格式，不再是 .ipk
       # ============================================================
-      - name: 复制第三方 IPK 包
+      - name: 复制第三方 APK 包
         run: |
           # 检查仓库中 packages 目录是否存在且有内容
           PKG_SRC="$GITHUB_WORKSPACE/targets/x86_64/packages"
-          # 如果目录存在且包含 .ipk 文件
-          if [ -d "$PKG_SRC" ] && ls "$PKG_SRC"/*.ipk >/dev/null 2>&1; then
+          # 如果目录存在且包含 .apk 文件
+          if [ -d "$PKG_SRC" ] && ls "$PKG_SRC"/*.apk >/dev/null 2>&1; then
             # 在 ImageBuilder 根目录创建 packages 目录
             mkdir -p /tmp/build/imagebuilder/packages
-            # 复制所有 ipk 文件到 ImageBuilder 的 packages 目录
-            cp -v "$PKG_SRC"/*.ipk /tmp/build/imagebuilder/packages/
+            # 复制所有 apk 文件到 ImageBuilder 的 packages 目录
+            cp -v "$PKG_SRC"/*.apk /tmp/build/imagebuilder/packages/
             # 打印复制后的文件列表
             echo "===== ImageBuilder/packages 目录内容 ====="
             ls -lh /tmp/build/imagebuilder/packages/
           else
-            # 没有第三方 IPK 时，跳过但打印提示
-            echo "未发现第三方 IPK，跳过此步骤"
+            # 没有第三方 APK 时，跳过但打印提示
+            echo "未发现第三方 APK 包，跳过此步骤"
           fi
 
       # ============================================================
@@ -192,14 +185,12 @@ jobs:
             #   -a 保留权限和时间戳
             #   -v 显示详细过程
             #   --delete 删除目标中多余的文件（保持完全一致）
-            # 注意：如果 ImageBuilder 自带的 files 目录有内容，会被清空
             mkdir -p "$DST"
             rsync -av --delete "$SRC/" "$DST/"
             # 打印同步后的文件树，便于确认预置内容
             echo "===== 预置到 rootfs 的文件列表 ====="
             find "$DST" -type f -exec ls -lh {} \;
           else
-            # 源目录不存在时打印警告
             echo "警告：未发现 files 目录，将不会预置任何文件"
           fi
 
@@ -211,14 +202,12 @@ jobs:
         run: |
           cd /tmp/build/imagebuilder
           # 更新 feeds 索引（拉取官方软件包列表）
-          # -a 表示全部更新
           ./scripts/feeds update -a
           # 安装所有 feeds 中的包到 staging_dir
           ./scripts/feeds install -a
           # 读取 packages.list 并转为空格分隔的字符串
-          # tr '\n' ' ' 把每行结尾的换行替换为空格
-          # sed 's/ $//' 去掉末尾多余的空格
-          PKG_LIST=$(tr '\n' ' ' < "$GITHUB_WORKSPACE/targets/x86_64/packages.list" | sed 's/ $//')
+          # 过滤掉空行和以 # 开头的注释行
+          PKG_LIST=$(grep -v '^\s*#' "$GITHUB_WORKSPACE/targets/x86_64/packages.list" | grep -v '^\s*$' | tr '\n' ' ' | sed 's/ $//')
           # 打印即将使用的包清单
           echo "===== 将打入固件的软件包 ====="
           echo "$PKG_LIST"
@@ -242,20 +231,17 @@ jobs:
           find bin/targets -type f -name "*.tar.gz" -exec ls -lh {} \; || true
           # 查找 rootfs.tar.gz 的路径
           ROOTFS_PATH=$(find bin/targets -type f -name "*rootfs.tar.gz" | head -n1)
-          # 未找到则报错退出
           if [ -z "$ROOTFS_PATH" ]; then
             echo "错误：未找到 rootfs.tar.gz，构建失败"
             exit 1
           fi
-          # 打印找到的路径
           echo "===== 找到 rootfs.tar.gz: $ROOTFS_PATH ====="
           # 复制到统一路径，方便后续步骤引用
           cp "$ROOTFS_PATH" /tmp/build/rootfs.tar.gz
-          # 打印文件大小
           ls -lh /tmp/build/rootfs.tar.gz
           # 查看压缩包内的关键文件，确认预置生效
           echo "===== 检查压缩包内是否包含预置文件 ====="
-          tar -tzf /tmp/build/rootfs.tar.gz | grep -E 'etc/(config/network|uci-defaults|shadow|openwrt_release)' | head -20 || true
+          tar -tzf /tmp/build/rootfs.tar.gz | grep -E 'etc/(apk/repositories.d|config/network|uci-defaults|shadow|openwrt_release)' | head -20 || true
 
       # ============================================================
       # 步骤 10：上传 rootfs.tar.gz 为 Artifact
@@ -264,10 +250,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           # Artifact 名称（在 Actions 页面下载时显示）
-          name: istoreos-rootfs-x86_64
+          name: istoreos-rootfs-x86_64-25.12.5
           # 上传的文件路径
           path: /tmp/build/rootfs.tar.gz
-          # 保留天数（免费额度最长 90 天）
+          # 保留天数
           retention-days: 30
 
       # ============================================================
@@ -284,27 +270,23 @@ jobs:
           # 复制 rootfs.tar.gz 到构建上下文
           cp /tmp/build/rootfs.tar.gz .
           # 动态生成 Dockerfile
-          # 使用 cat <<'EOF' 保留内容原样（不做变量替换）
           cat > Dockerfile <<'DOCKERFILE_EOF'
-          # 基础镜像：从空镜像开始，只包含我们的 rootfs
+          # 基础镜像：从空镜像开始
           FROM scratch
           # 将预置好配置的 rootfs 铺到容器根目录
           ADD rootfs.tar.gz /
           # 设置默认命令：启动 OpenWrt 的 procd 初始化系统
           CMD ["/sbin/init"]
           DOCKERFILE_EOF
-          # 打印 Dockerfile 内容，便于日志确认
           echo "===== Dockerfile 内容 ====="
           cat Dockerfile
           # 登录 Docker Hub（凭据从仓库 Secrets 读取）
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
             docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
           # 构建镜像
-          # 镜像名格式：<用户名>/<仓库名>:<标签>
           docker build \
-            -t "${{ secrets.DOCKERHUB_USERNAME }}/istoreos-custom:amd64" \
+            -t "${{ secrets.DOCKERHUB_USERNAME }}/istoreos-custom:amd64-25.12.5" \
             .
           # 推送镜像到 Docker Hub
-          docker push "${{ secrets.DOCKERHUB_USERNAME }}/istoreos-custom:amd64"
-          # 打印推送成功的提示
+          docker push "${{ secrets.DOCKERHUB_USERNAME }}/istoreos-custom:amd64-25.12.5"
           echo "===== 镜像已推送到 Docker Hub ====="

@@ -2,9 +2,9 @@
 # 系统配置：主机名、时区、NTP、LuCI 首页信息
 # ============================================================
 config system
-        # 主机名：容器内显示的名字
+        # 主机名
         option hostname 'iStoreOS'
-        # 关闭 tty 登录提示（容器里不需要，减少启动噪音）
+        # 关闭 tty 登录提示（容器里不需要）
         option ttylogin '0'
         # 系统日志大小（KB）
         option log_size '128'
@@ -21,11 +21,11 @@ config system
         # 时区偏移（CST-8 即 UTC+8）
         option timezone 'CST-8'
         # LuCI 首页描述：改成你自己的标识
-        option description 'Custom iStoreOS build'
+        option description 'Custom iStoreOS 25.12.5 build'
         # LuCI 首页备注
         option notes 'Built with GitHub Actions'
 
-# NTP 时间服务器：使用国内源，加快同步
+# NTP 时间服务器：使用国内源
 config timeserver 'ntp'
         list server 'ntp.aliyun.com'
         list server 'ntp.tencent.com'

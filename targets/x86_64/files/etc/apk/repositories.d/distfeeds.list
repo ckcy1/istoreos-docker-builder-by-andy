@@ -1,0 +1,34 @@
+# ============================================================
+# iStoreOS 25.12.5 x86_64 软件源配置 (apk 格式)
+# 路径: /etc/apk/repositories.d/distfeeds.list
+# 格式: 每行一个 packages.adb 索引文件的 URL
+#
+# 注意：kmods 源中的内核哈希必须与 ImageBuilder 实际版本匹配
+# 建议在构建时动态生成，而非硬编码
+# 内核版本为 6.12.60，对应哈希请从构建产物的 kmods 目录名中获取
+# ============================================================
+
+# 核心包（targets 目录）
+https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/targets/x86/64/packages/packages.adb
+
+# 基础包
+https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/packages/x86_64/base/packages.adb
+
+# LuCI 包
+https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/packages/x86_64/luci/packages.adb
+
+# 常规包
+https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/packages/x86_64/packages/packages.adb
+
+# 路由包
+https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/packages/x86_64/routing/packages.adb
+
+# 电话包
+https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/packages/x86_64/telephony/packages.adb
+
+# 视频包
+https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/packages/x86_64/video/packages.adb
+
+# 内核模块包（哈希需从构建产物动态获取）
+# 构建后从 bin/targets/x86/64/kmods/ 目录名中读取实际哈希并替换
+# https://mirrors.cernet.edu.cn/openwrt/releases/25.12.5/targets/x86/64/kmods/<KMOD_HASH>/packages.adb

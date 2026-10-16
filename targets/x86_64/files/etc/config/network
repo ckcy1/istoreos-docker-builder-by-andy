@@ -15,14 +15,12 @@ config globals 'globals'
     option ula_prefix 'fd00::/48'
 
 # 桥接设备：默认包含 eth0
-# 容器里 Macvlan 会识别为 eth0@ifX，从容器内看就是 eth0
 config device
     option name 'br-lan'
     option type 'bridge'
     list ports 'eth0'
 
 # LAN 接口：DHCP 自动获取 IP
-# 这样容器启动后会自动从局域网 DHCP 拿到 IP
 config interface 'lan'
     option device 'br-lan'
     option proto 'dhcp'
