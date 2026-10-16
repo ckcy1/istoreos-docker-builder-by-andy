@@ -202,9 +202,9 @@ jobs:
         run: |
           cd /tmp/build/imagebuilder
           # 更新 feeds 索引（拉取官方软件包列表）
-          ./scripts/feeds update -a
+          #./scripts/feeds update -a
           # 安装所有 feeds 中的包到 staging_dir
-          ./scripts/feeds install -a
+          #./scripts/feeds install -a
           # 读取 packages.list 并转为空格分隔的字符串
           # 过滤掉空行和以 # 开头的注释行
           PKG_LIST=$(grep -v '^\s*#' "$GITHUB_WORKSPACE/targets/x86_64/packages.list" | grep -v '^\s*$' | tr '\n' ' ' | sed 's/ $//')
