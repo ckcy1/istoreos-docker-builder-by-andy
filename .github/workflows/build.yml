@@ -220,43 +220,83 @@ jobs:
             PACKAGES="$PKG_LIST" \
             FILES=files
 
+      # # ============================================================
+      # # 步骤 9：检查并定位构建产物
+      # # ============================================================
+      # - name: 检查构建产物
+      #   run: |
+      #     cd /tmp/build/imagebuilder
+      #     # 打印所有构建产物
+      #     echo "===== 构建产物列表 ====="
+      #     find bin/targets -type f -name "*.tar.gz" -exec ls -lh {} \; || true
+      #     # 查找 rootfs.tar.gz 的路径
+      #     ROOTFS_PATH=$(find bin/targets -type f -name "*rootfs.tar.gz" | head -n1)
+      #     if [ -z "$ROOTFS_PATH" ]; then
+      #       echo "错误：未找到 rootfs.tar.gz，构建失败"
+      #       exit 1
+      #     fi
+      #     echo "===== 找到 rootfs.tar.gz: $ROOTFS_PATH ====="
+      #     # 复制到统一路径，方便后续步骤引用
+      #     cp "$ROOTFS_PATH" /tmp/build/rootfs.tar.gz
+      #     ls -lh /tmp/build/rootfs.tar.gz
+      #     # 查看压缩包内的关键文件，确认预置生效
+      #     echo "===== 检查压缩包内是否包含预置文件 ====="
+      #     tar -tzf /tmp/build/rootfs.tar.gz | grep -E 'etc/(apk/repositories.d|config/network|uci-defaults|shadow|openwrt_release)' | head -20 || true
+
+      # # ============================================================
+      # # 步骤 10：上传 rootfs.tar.gz 为 Artifact
+      # # ============================================================
+      # - name: 上传 rootfs Artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     # Artifact 名称（在 Actions 页面下载时显示）
+      #     name: istoreos-rootfs-x86_64-25.12.5
+      #     # 上传的文件路径
+      #     path: /tmp/build/rootfs.tar.gz
+      #     # 保留天数
+      #     retention-days: 30
+
       # ============================================================
-      # 步骤 9：检查并定位构建产物
+      # 步骤 9：检查并收集所有构建产物
       # ============================================================
-      - name: 检查构建产物
+      - name: 检查并收集构建产物
         run: |
           cd /tmp/build/imagebuilder
-          # 打印所有构建产物
-          echo "===== 构建产物列表 ====="
-          find bin/targets -type f -name "*.tar.gz" -exec ls -lh {} \; || true
-          # 查找 rootfs.tar.gz 的路径
-          ROOTFS_PATH=$(find bin/targets -type f -name "*rootfs.tar.gz" | head -n1)
-          if [ -z "$ROOTFS_PATH" ]; then
-            echo "错误：未找到 rootfs.tar.gz，构建失败"
+          echo "===== bin/targets 完整文件列表 ====="
+          find bin/targets -type f -exec ls -lh {} \; || true
+
+          # 收集 rootfs.tar.gz
+          ROOTFS=$(find bin/targets -type f -name "*rootfs.tar.gz" | head -n1)
+          if [ -z "$ROOTFS" ]; then
+            echo "错误：未找到 rootfs.tar.gz"
             exit 1
           fi
-          echo "===== 找到 rootfs.tar.gz: $ROOTFS_PATH ====="
-          # 复制到统一路径，方便后续步骤引用
-          cp "$ROOTFS_PATH" /tmp/build/rootfs.tar.gz
-          ls -lh /tmp/build/rootfs.tar.gz
-          # 查看压缩包内的关键文件，确认预置生效
-          echo "===== 检查压缩包内是否包含预置文件 ====="
-          tar -tzf /tmp/build/rootfs.tar.gz | grep -E 'etc/(apk/repositories.d|config/network|uci-defaults|shadow|openwrt_release)' | head -20 || true
+          cp "$ROOTFS" /tmp/build/rootfs.tar.gz
+
+          # 收集所有 img 文件
+          find bin/targets -type f \( -name "*.img" -o -name "*.img.gz" \) -exec cp {} /tmp/build/ \;
+          echo "===== /tmp/build 目录最终产物 ====="
+          ls -lh /tmp/build/
 
       # ============================================================
-      # 步骤 10：上传 rootfs.tar.gz 为 Artifact
+      # 步骤 10：上传所有构建产物
       # ============================================================
-      - name: 上传 rootfs Artifact
+      - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          # Artifact 名称（在 Actions 页面下载时显示）
-          name: istoreos-rootfs-x86_64-25.12.5
-          # 上传的文件路径
-          path: /tmp/build/rootfs.tar.gz
-          # 保留天数
+          name: istoreos-x86_64-25.12.5
+          path: |
+            /tmp/build/rootfs.tar.gz
+            /tmp/build/*.img
+            /tmp/build/*.img.gz
+          if-no-files-found: warn
           retention-days: 30
 
-      # ============================================================
+
+
+
+
+      # # ============================================================
       # 步骤 11：构建 Docker 镜像并推送到 Docker Hub（可选）
       # 只在手动触发且勾选了 docker_push 时执行
       # ============================================================
